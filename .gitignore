@@ -12,8 +12,23 @@ pubspec.lock
 # Documentation
 doc/api/
 
-# dotenv environment variables file
-.env*
+# Security - NEVER COMMIT THESE
+env.dart
+.env
+.env.local
+.env.production
+config/
+secrets/
+
+# Credentials & Keys
+lib/secrets/
+lib/config/
+lib/env.dart
+lib/.env
+
+# Admin credentials
+admin_credentials.json
+admin_config.dart
 
 # Avoid committing generated Javascript files
 *.dart.js
