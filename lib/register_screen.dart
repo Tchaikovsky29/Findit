@@ -1,10 +1,10 @@
 import 'package:flutter/material.dart';
 import 'utils/constants.dart';
 import 'utils/validators.dart';
-import 'home_screen.dart';
+// import 'utils/supabase_service.dart';
 
 class RegisterScreen extends StatefulWidget {
-  const RegisterScreen({Key? key}) : super(key: key);
+  const RegisterScreen({super.key});
 
   @override
   State<RegisterScreen> createState() => _RegisterScreenState();
@@ -24,13 +24,14 @@ class _RegisterScreenState extends State<RegisterScreen> {
   String? _selectedBranch;
   String? _selectedDepartment;
 
-  final List<String> _yearOptions = ['1st Year', '2nd Year', '3rd Year', '4th Year'];
+  final List<String> _yearOptions = ['1', '2', '3', '4'];
   final List<String> _branchOptions = ['CSE', 'ECE', 'Mechanical', 'Civil', 'Electrical'];
   final List<String> _departmentOptions = ['Engineering', 'Science', 'Arts', 'Commerce'];
 
   bool _isLoading = false;
   bool _obscurePassword = true;
   bool _obscureConfirmPassword = true;
+  String? _errorMessage;
 
   @override
   void initState() {
@@ -54,7 +55,7 @@ class _RegisterScreenState extends State<RegisterScreen> {
     super.dispose();
   }
 
-  void _handleRegister() {
+  void _handleRegister() async {
     if (_formKey.currentState!.validate()) {
       if (_selectedYear == null || _selectedBranch == null || _selectedDepartment == null) {
         ScaffoldMessenger.of(context).showSnackBar(
@@ -68,19 +69,38 @@ class _RegisterScreenState extends State<RegisterScreen> {
 
       setState(() => _isLoading = true);
 
-      Future.delayed(const Duration(seconds: 2), () {
-        setState(() => _isLoading = false);
+      try {
+        // Uncomment to use Supabase
+        // final success = await SupabaseService.registerUser(
+        //   prn: _prnController.text,
+        //   password: _passwordController.text,
+        //   fullName: _nameController.text,
+        //   year: int.parse(_selectedYear!),
+        //   branch: _selectedBranch!,
+        //   department: _selectedDepartment!,
+        //   phone: _phoneController.text,
+        //   email: _emailController.text,
+        // );
 
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-            content: Text('Account created successfully!'),
-            backgroundColor: AppConstants.successColor,
-            duration: Duration(seconds: 2),
-          ),
-        );
+        // Mock registration
+        await Future.delayed(const Duration(seconds: 2));
 
-        Navigator.of(context).pushReplacementNamed('/home');
-      });
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(
+              content: Text('Account created successfully!'),
+              backgroundColor: AppConstants.successColor,
+            ),
+          );
+          Navigator.of(context).pushReplacementNamed('/home');
+        }
+      } catch (e) {
+        setState(() => _errorMessage = 'Registration failed: $e');
+      } finally {
+        if (mounted) {
+          setState(() => _isLoading = false);
+        }
+      }
     }
   }
 
@@ -99,11 +119,35 @@ class _RegisterScreenState extends State<RegisterScreen> {
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
+              if (_errorMessage != null) ...[
+                Container(
+                  padding: const EdgeInsets.all(AppConstants.paddingMedium),
+                  decoration: BoxDecoration(
+                    color: AppConstants.errorColor.withValues(alpha: 0.1),
+                    borderRadius: BorderRadius.circular(AppConstants.radiusLarge),
+                    border: Border.all(color: AppConstants.errorColor),
+                  ),
+                  child: Row(
+                    children: [
+                      const Icon(Icons.error, color: AppConstants.errorColor),
+                      const SizedBox(width: AppConstants.paddingMedium),
+                      Expanded(
+                        child: Text(
+                          _errorMessage!,
+                          style: const TextStyle(color: AppConstants.errorColor),
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+                const SizedBox(height: AppConstants.paddingMedium),
+              ],
+
               TextFormField(
                 controller: _prnController,
                 decoration: const InputDecoration(
                   labelText: 'PRN (College Roll Number)',
-                  prefixIcon: Icon(Icons.badge, color: AppConstants.primaryColor),
+                  prefixIcon: Icon(Icons.badge),
                   hintText: 'e.g., CS12345',
                 ),
                 validator: Validators.validatePRN,
@@ -114,7 +158,7 @@ class _RegisterScreenState extends State<RegisterScreen> {
                 controller: _nameController,
                 decoration: const InputDecoration(
                   labelText: 'Full Name',
-                  prefixIcon: Icon(Icons.person, color: AppConstants.primaryColor),
+                  prefixIcon: Icon(Icons.person),
                   hintText: 'Enter your full name',
                 ),
                 validator: Validators.validateFullName,
@@ -125,7 +169,7 @@ class _RegisterScreenState extends State<RegisterScreen> {
                 controller: _emailController,
                 decoration: const InputDecoration(
                   labelText: 'Email Address',
-                  prefixIcon: Icon(Icons.email, color: AppConstants.primaryColor),
+                  prefixIcon: Icon(Icons.email),
                   hintText: 'your.email@college.edu',
                 ),
                 keyboardType: TextInputType.emailAddress,
@@ -137,7 +181,7 @@ class _RegisterScreenState extends State<RegisterScreen> {
                 controller: _phoneController,
                 decoration: const InputDecoration(
                   labelText: 'Phone Number',
-                  prefixIcon: Icon(Icons.phone, color: AppConstants.primaryColor),
+                  prefixIcon: Icon(Icons.phone),
                   hintText: '10-digit phone number',
                 ),
                 keyboardType: TextInputType.phone,
@@ -146,65 +190,57 @@ class _RegisterScreenState extends State<RegisterScreen> {
               const SizedBox(height: AppConstants.paddingMedium),
 
               DropdownButtonFormField<String>(
-                value: _selectedYear,
+                initialValue: _selectedYear,
                 decoration: const InputDecoration(
                   labelText: 'Year of Study',
-                  prefixIcon: Icon(Icons.school, color: AppConstants.primaryColor),
+                  prefixIcon: Icon(Icons.school),
                 ),
                 items: _yearOptions
-                    .map((year) => DropdownMenuItem(value: year, child: Text(year)))
+                    .map((year) => DropdownMenuItem(
+                          value: year,
+                          child: Text('Year $year'),
+                        ))
                     .toList(),
-                onChanged: (value) {
-                  setState(() => _selectedYear = value);
-                },
-                validator: (value) {
-                  if (value == null) {
-                    return 'Please select a year';
-                  }
-                  return null;
-                },
+                onChanged: (value) => setState(() => _selectedYear = value),
+                validator: (value) =>
+                    value == null ? 'Please select a year' : null,
               ),
               const SizedBox(height: AppConstants.paddingMedium),
 
               DropdownButtonFormField<String>(
-                value: _selectedBranch,
+                initialValue: _selectedBranch,
                 decoration: const InputDecoration(
                   labelText: 'Branch',
-                  prefixIcon: Icon(Icons.engineering, color: AppConstants.primaryColor),
+                  prefixIcon: Icon(Icons.engineering),
                 ),
                 items: _branchOptions
-                    .map((branch) => DropdownMenuItem(value: branch, child: Text(branch)))
+                    .map((branch) => DropdownMenuItem(
+                          value: branch,
+                          child: Text(branch),
+                        ))
                     .toList(),
-                onChanged: (value) {
-                  setState(() => _selectedBranch = value);
-                },
-                validator: (value) {
-                  if (value == null) {
-                    return 'Please select a branch';
-                  }
-                  return null;
-                },
+                onChanged: (value) => setState(() => _selectedBranch = value),
+                validator: (value) =>
+                    value == null ? 'Please select a branch' : null,
               ),
               const SizedBox(height: AppConstants.paddingMedium),
 
               DropdownButtonFormField<String>(
-                value: _selectedDepartment,
+                initialValue: _selectedDepartment,
                 decoration: const InputDecoration(
-                  labelText: 'Department / Course',
-                  prefixIcon: Icon(Icons.business, color: AppConstants.primaryColor),
+                  labelText: 'Department',
+                  prefixIcon: Icon(Icons.business),
                 ),
                 items: _departmentOptions
-                    .map((dept) => DropdownMenuItem(value: dept, child: Text(dept)))
+                    .map((dept) => DropdownMenuItem(
+                          value: dept,
+                          child: Text(dept),
+                        ))
                     .toList(),
-                onChanged: (value) {
-                  setState(() => _selectedDepartment = value);
-                },
-                validator: (value) {
-                  if (value == null) {
-                    return 'Please select a department';
-                  }
-                  return null;
-                },
+                onChanged: (value) =>
+                    setState(() => _selectedDepartment = value),
+                validator: (value) =>
+                    value == null ? 'Please select a department' : null,
               ),
               const SizedBox(height: AppConstants.paddingMedium),
 
@@ -212,12 +248,13 @@ class _RegisterScreenState extends State<RegisterScreen> {
                 controller: _passwordController,
                 decoration: InputDecoration(
                   labelText: 'Password',
-                  prefixIcon: const Icon(Icons.lock, color: AppConstants.primaryColor),
+                  prefixIcon: const Icon(Icons.lock),
                   hintText: 'Min 8 characters, 1 uppercase, 1 number',
                   suffixIcon: IconButton(
                     icon: Icon(
-                      _obscurePassword ? Icons.visibility_off : Icons.visibility,
-                      color: AppConstants.hintColor,
+                      _obscurePassword
+                          ? Icons.visibility_off
+                          : Icons.visibility,
                     ),
                     onPressed: () {
                       setState(() {
@@ -235,12 +272,13 @@ class _RegisterScreenState extends State<RegisterScreen> {
                 controller: _confirmPasswordController,
                 decoration: InputDecoration(
                   labelText: 'Confirm Password',
-                  prefixIcon: const Icon(Icons.lock, color: AppConstants.primaryColor),
+                  prefixIcon: const Icon(Icons.lock),
                   hintText: 'Re-enter your password',
                   suffixIcon: IconButton(
                     icon: Icon(
-                      _obscureConfirmPassword ? Icons.visibility_off : Icons.visibility,
-                      color: AppConstants.hintColor,
+                      _obscureConfirmPassword
+                          ? Icons.visibility_off
+                          : Icons.visibility,
                     ),
                     onPressed: () {
                       setState(() {
@@ -250,12 +288,13 @@ class _RegisterScreenState extends State<RegisterScreen> {
                   ),
                 ),
                 obscureText: _obscureConfirmPassword,
-                validator: (value) => Validators.validatePasswordConfirmation(
+                validator: (value) =>
+                    Validators.validatePasswordConfirmation(
                   value,
                   _passwordController.text,
                 ),
               ),
-              const SizedBox(height: AppConstants.paddingXXLarge), // âœ… FIXED
+              const SizedBox(height: AppConstants.paddingXXLarge),
 
               SizedBox(
                 width: double.infinity,
@@ -268,7 +307,8 @@ class _RegisterScreenState extends State<RegisterScreen> {
                           width: 24,
                           child: CircularProgressIndicator(
                             strokeWidth: 2,
-                            valueColor: AlwaysStoppedAnimation<Color>(Colors.white),
+                            valueColor:
+                                AlwaysStoppedAnimation<Color>(Colors.white),
                           ),
                         )
                       : const Text(

@@ -2,10 +2,9 @@ import 'package:flutter/material.dart';
 import 'utils/constants.dart';
 import 'utils/validators.dart';
 import 'register_screen.dart';
-import 'home_screen.dart';
 
 class LoginScreen extends StatefulWidget {
-  const LoginScreen({Key? key}) : super(key: key);
+  const LoginScreen({super.key});
 
   @override
   State<LoginScreen> createState() => _LoginScreenState();
@@ -13,19 +12,12 @@ class LoginScreen extends StatefulWidget {
 
 class _LoginScreenState extends State<LoginScreen> {
   final _formKey = GlobalKey<FormState>();
-
-  late TextEditingController _prnController;
-  late TextEditingController _passwordController;
+  final _prnController = TextEditingController();
+  final _passwordController = TextEditingController();
 
   bool _isLoading = false;
   bool _obscurePassword = true;
-
-  @override
-  void initState() {
-    super.initState();
-    _prnController = TextEditingController();
-    _passwordController = TextEditingController();
-  }
+  String? _errorMessage;
 
   @override
   void dispose() {
@@ -34,23 +26,43 @@ class _LoginScreenState extends State<LoginScreen> {
     super.dispose();
   }
 
-  void _handleLogin() {
+  void _handleLogin() async {
     if (_formKey.currentState!.validate()) {
-      setState(() => _isLoading = true);
-
-      Future.delayed(const Duration(seconds: 2), () {
-        setState(() => _isLoading = false);
-
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text('Login successful! Welcome ${_prnController.text}'),
-            backgroundColor: AppConstants.successColor,
-            duration: const Duration(seconds: 2),
-          ),
-        );
-
-        Navigator.of(context).pushReplacementNamed('/home');
+      setState(() {
+        _isLoading = true;
+        _errorMessage = null;
       });
+
+      try {
+        // Import SupabaseService
+        // final user = await SupabaseService.loginUser(
+        //   _prnController.text,
+        //   _passwordController.text,
+        // );
+
+        // For demo, using mock login
+        await Future.delayed(const Duration(seconds: 1));
+        
+        if (_prnController.text == 'CS12345' && _passwordController.text == 'Test@1234') {
+          if (mounted) {
+            ScaffoldMessenger.of(context).showSnackBar(
+              SnackBar(
+                content: Text('Welcome ${_prnController.text}!'),
+                backgroundColor: AppConstants.successColor,
+              ),
+            );
+            Navigator.of(context).pushReplacementNamed('/home');
+          }
+        } else {
+          setState(() => _errorMessage = 'Invalid PRN or password');
+        }
+      } catch (e) {
+        setState(() => _errorMessage = 'Login failed: $e');
+      } finally {
+        if (mounted) {
+          setState(() => _isLoading = false);
+        }
+      }
     }
   }
 
@@ -66,11 +78,11 @@ class _LoginScreenState extends State<LoginScreen> {
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.center,
             children: [
-              const SizedBox(height: AppConstants.paddingXXLarge), // âœ… FIXED
+              const SizedBox(height: AppConstants.paddingXXLarge),
 
-              Text(
+              const Text(
                 AppConstants.appName,
-                style: const TextStyle(
+                style: TextStyle(
                   fontSize: 40,
                   fontWeight: FontWeight.bold,
                   color: AppConstants.primaryColor,
@@ -80,34 +92,58 @@ class _LoginScreenState extends State<LoginScreen> {
 
               Text(
                 AppConstants.appTagline,
-                style: const TextStyle(
+                style: TextStyle(
                   fontSize: 16,
-                  color: AppConstants.hintColor,
+                  color: Colors.grey[600],
                 ),
               ),
-              const SizedBox(height: AppConstants.paddingXXLarge), // âœ… FIXED
+              const SizedBox(height: AppConstants.paddingXXLarge),
 
               Align(
                 alignment: Alignment.centerLeft,
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    Text(
-                      AppConstants.loginTitle,
+                    const Text(
+                      'Welcome Back',
                       style: AppConstants.heading2,
                     ),
                     const SizedBox(height: 4),
                     Text(
-                      AppConstants.loginSubtitle,
-                      style: const TextStyle(
+                      'Sign in to your account',
+                      style: TextStyle(
                         fontSize: 14,
-                        color: AppConstants.hintColor,
+                        color: Colors.grey[600],
                       ),
                     ),
                   ],
                 ),
               ),
-              const SizedBox(height: AppConstants.paddingXXLarge), // âœ… FIXED
+              const SizedBox(height: AppConstants.paddingXXLarge),
+
+              if (_errorMessage != null)
+                Container(
+                  padding: const EdgeInsets.all(AppConstants.paddingMedium),
+                  decoration: BoxDecoration(
+                    color: AppConstants.errorColor.withValues(alpha: 0.1),
+                    borderRadius: BorderRadius.circular(AppConstants.radiusLarge),
+                    border: Border.all(color: AppConstants.errorColor),
+                  ),
+                  child: Row(
+                    children: [
+                      const Icon(Icons.error, color: AppConstants.errorColor),
+                      const SizedBox(width: AppConstants.paddingMedium),
+                      Expanded(
+                        child: Text(
+                          _errorMessage!,
+                          style: const TextStyle(color: AppConstants.errorColor),
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              if (_errorMessage != null)
+                const SizedBox(height: AppConstants.paddingMedium),
 
               Form(
                 key: _formKey,
@@ -118,11 +154,10 @@ class _LoginScreenState extends State<LoginScreen> {
                       controller: _prnController,
                       decoration: const InputDecoration(
                         labelText: 'PRN (College Roll Number)',
-                        prefixIcon: Icon(Icons.badge, color: AppConstants.primaryColor),
-                        hintText: 'Enter your PRN',
+                        prefixIcon: Icon(Icons.badge),
+                        hintText: 'e.g., CS12345',
                       ),
                       validator: Validators.validatePRN,
-                      keyboardType: TextInputType.text,
                     ),
                     const SizedBox(height: AppConstants.paddingLarge),
 
@@ -130,14 +165,13 @@ class _LoginScreenState extends State<LoginScreen> {
                       controller: _passwordController,
                       decoration: InputDecoration(
                         labelText: 'Password',
-                        prefixIcon: const Icon(Icons.lock, color: AppConstants.primaryColor),
+                        prefixIcon: const Icon(Icons.lock),
                         hintText: 'Enter your password',
                         suffixIcon: IconButton(
                           icon: Icon(
                             _obscurePassword
                                 ? Icons.visibility_off
                                 : Icons.visibility,
-                            color: AppConstants.hintColor,
                           ),
                           onPressed: () {
                             setState(() {
@@ -154,7 +188,7 @@ class _LoginScreenState extends State<LoginScreen> {
                         return null;
                       },
                     ),
-                    const SizedBox(height: AppConstants.paddingXXLarge), // âœ… FIXED
+                    const SizedBox(height: AppConstants.paddingXXLarge),
 
                     SizedBox(
                       width: double.infinity,
@@ -183,14 +217,14 @@ class _LoginScreenState extends State<LoginScreen> {
                   ],
                 ),
               ),
-              const SizedBox(height: AppConstants.paddingXXLarge), // âœ… FIXED
+              const SizedBox(height: AppConstants.paddingXXLarge),
 
               Row(
                 mainAxisAlignment: MainAxisAlignment.center,
                 children: [
                   const Text(
                     'Don\'t have an account? ',
-                    style: TextStyle(color: AppConstants.hintColor),
+                    style: TextStyle(fontSize: 14),
                   ),
                   TextButton(
                     onPressed: () {

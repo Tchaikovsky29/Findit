@@ -1,11 +1,14 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
+import 'package:provider/provider.dart';
 import 'utils/constants.dart';
+import 'utils/theme_provider.dart';
 import 'search_screen.dart';
 import 'found_screen.dart';
 import 'profile_screen.dart';
 
 class HomeScreen extends StatefulWidget {
-  const HomeScreen({Key? key}) : super(key: key);
+  const HomeScreen({super.key});
 
   @override
   State<HomeScreen> createState() => _HomeScreenState();
@@ -22,37 +25,51 @@ class _HomeScreenState extends State<HomeScreen> {
 
   @override
   Widget build(BuildContext context) {
-    return WillPopScope(
-      onWillPop: () async {
-        return await showDialog(
-          context: context,
-          builder: (context) => AlertDialog(
-            title: const Text('Logout?'),
-            content: const Text('Are you sure you want to logout?'),
-            actions: [
-              TextButton(
-                onPressed: () => Navigator.pop(context, false),
-                child: const Text('Cancel'),
-              ),
-              TextButton(
-                onPressed: () {
-                  Navigator.of(context).pushReplacementNamed('/login');
-                },
-                child: const Text(
-                  'Logout',
-                  style: TextStyle(color: AppConstants.errorColor),
+    return PopScope(
+      canPop: false,
+      onPopInvokedWithResult: (bool didPop, dynamic result) {
+        if (_selectedIndex != 0) {
+          setState(() => _selectedIndex = 0);
+        } else {
+          showDialog(
+            context: context,
+            builder: (context) => AlertDialog(
+              title: const Text('Exit App?'),
+              content: const Text('Are you sure you want to exit?'),
+              actions: [
+                TextButton(
+                  onPressed: () => Navigator.pop(context, false),
+                  child: const Text('Cancel'),
                 ),
-              ),
-            ],
-          ),
-        ) ??
-            false;
+                TextButton(
+                  onPressed: () => Navigator.pop(context, true),
+                  child: const Text('Exit'),
+                ),
+              ],
+            ),
+          ).then((exit) {
+            if (exit == true) {
+              SystemNavigator.pop();
+            }
+          });
+        }
       },
       child: Scaffold(
         appBar: AppBar(
           title: const Text(AppConstants.appName),
           elevation: 0,
           actions: [
+            IconButton(
+              icon: Consumer<ThemeProvider>(
+                builder: (context, themeProvider, _) =>
+                    Icon(themeProvider.isDarkMode
+                        ? Icons.light_mode
+                        : Icons.dark_mode),
+              ),
+              onPressed: () {
+                context.read<ThemeProvider>().toggleTheme();
+              },
+            ),
             IconButton(
               icon: const Icon(Icons.logout),
               onPressed: () {
@@ -68,8 +85,8 @@ class _HomeScreenState extends State<HomeScreen> {
                       ),
                       TextButton(
                         onPressed: () {
-                          Navigator.pop(context);
-                          Navigator.of(context).pushReplacementNamed('/login');
+                          Navigator.of(context)
+                              .pushReplacementNamed('/login');
                         },
                         child: const Text(
                           'Logout',

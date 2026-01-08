@@ -1,6 +1,4 @@
-/// Custom validation functions for form fields
 class Validators {
-  /// Validate PRN (college roll number)
   static String? validatePRN(String? value) {
     if (value == null || value.isEmpty) {
       return 'PRN is required';
@@ -14,7 +12,6 @@ class Validators {
     return null;
   }
 
-  /// Validate password
   static String? validatePassword(String? value) {
     if (value == null || value.isEmpty) {
       return 'Password is required';
@@ -31,7 +28,6 @@ class Validators {
     return null;
   }
 
-  /// Validate password confirmation
   static String? validatePasswordConfirmation(String? value, String? password) {
     if (value == null || value.isEmpty) {
       return 'Please confirm your password';
@@ -42,7 +38,6 @@ class Validators {
     return null;
   }
 
-  /// Validate full name
   static String? validateFullName(String? value) {
     if (value == null || value.isEmpty) {
       return 'Full name is required';
@@ -56,7 +51,6 @@ class Validators {
     return null;
   }
 
-  /// Validate email address
   static String? validateEmail(String? value) {
     if (value == null || value.isEmpty) {
       return 'Email is required';
@@ -67,7 +61,6 @@ class Validators {
     return null;
   }
 
-  /// Validate phone number (10 digits)
   static String? validatePhone(String? value) {
     if (value == null || value.isEmpty) {
       return 'Phone number is required';
@@ -78,7 +71,6 @@ class Validators {
     return null;
   }
 
-  /// Validate required field
   static String? validateRequired(String? value, String fieldName) {
     if (value == null || value.isEmpty) {
       return '$fieldName is required';
@@ -86,7 +78,6 @@ class Validators {
     return null;
   }
 
-  /// Validate item title
   static String? validateItemTitle(String? value) {
     if (value == null || value.isEmpty) {
       return 'Item title is required';
@@ -94,13 +85,12 @@ class Validators {
     if (value.length < 2) {
       return 'Title must be at least 2 characters';
     }
-    if (value.length > 50) {
-      return 'Title must be less than 50 characters';
+    if (value.length > 100) {
+      return 'Title must be less than 100 characters';
     }
     return null;
   }
 
-  /// Validate item description
   static String? validateDescription(String? value) {
     if (value == null || value.isEmpty) {
       return 'Description is required';
