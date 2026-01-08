@@ -2,6 +2,7 @@
 /// DO NOT commit actual credentials
 /// Copy to env.dart and fill with real values
 /// env.dart is in .gitignore (not committed)
+library;
 
 class EnvironmentConfig {
   // ===== SUPABASE CREDENTIALS =====
