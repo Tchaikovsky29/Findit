@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:image_picker/image_picker.dart';
 import 'dart:io';
+import 'dart:async';
 import 'utils/constants.dart';
 import 'utils/validators.dart';
 import 'package:http/http.dart' as http;
@@ -27,6 +28,8 @@ class _FoundItemsScreenState extends State<FoundItemsScreen> {
 
   bool _isAddingItem = false;
   bool _showAddForm = false;
+  bool _isAnalyzingImage = false;
+  String? _analysisError;
 
   List<FoundItem> _postedItems = [
     FoundItem(
@@ -67,28 +70,76 @@ class _FoundItemsScreenState extends State<FoundItemsScreen> {
         maxHeight: 800,
       );
       if (pickedFile != null) {
-        setState(() => _selectedImage = File(pickedFile.path));
+        setState(() {
+          _selectedImage = File(pickedFile.path);
+          _isAnalyzingImage = true;
+          _analysisError = null;
+          _llmResult = null;
+        });
         
-        // New: Convert image to base64 and send to Python server
-        final bytes = await pickedFile.readAsBytes();
-        final base64Image = base64Encode(bytes);
-        
-        final response = await http.post(
-          Uri.parse('http://localhost:5000/analyze_image'),  // Use localhost for USB-connected device with ADB reverse
-          headers: {'Content-Type': 'application/json'},
-          body: jsonEncode({'image_base64': base64Image}),
-        );
-        
-        if (response.statusCode == 200) {
-          final data = jsonDecode(response.body);
+        // Convert image to base64 and send to API
+        try {
+          final bytes = await pickedFile.readAsBytes();
+          final base64Image = base64Encode(bytes);
+          
+          final response = await http.post(
+            Uri.parse('https://findit-api-production-1478.up.railway.app/analyze_image'),
+            headers: {'Content-Type': 'application/json'},
+            body: jsonEncode({'image_base64': base64Image}),
+          ).timeout(
+            const Duration(seconds: 120), // 2 minute timeout for LLM
+            onTimeout: () => throw TimeoutException('Image analysis took too long (>120s)'),
+          );
+          
+          if (response.statusCode == 200) {
+            final data = jsonDecode(response.body);
+            setState(() {
+              _llmResult = data['result'];
+              _isAnalyzingImage = false;
+              _analysisError = null;
+            });
+            ScaffoldMessenger.of(context).showSnackBar(
+              const SnackBar(content: Text('Image analyzed successfully!')),
+            );
+          } else {
+            final errorMsg = 'API returned ${response.statusCode}: ${response.body}';
+            setState(() {
+              _isAnalyzingImage = false;
+              _analysisError = errorMsg;
+            });
+            ScaffoldMessenger.of(context).showSnackBar(
+              SnackBar(content: Text('Analysis failed: $errorMsg')),
+            );
+          }
+        } on http.ClientException catch (e) {
           setState(() {
-            _llmResult = data['result'];
+            _isAnalyzingImage = false;
+            _analysisError = 'Network error: ${e.toString()}';
           });
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(content: Text('Network error: ${e.toString()}')),
+          );
+        } on TimeoutException catch (e) {
+          setState(() {
+            _isAnalyzingImage = false;
+            _analysisError = 'Request timeout: ${e.toString()}';
+          });
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(content: Text('Request timeout: ${e.toString()}')),
+          );
+        } catch (e) {
+          setState(() {
+            _isAnalyzingImage = false;
+            _analysisError = e.toString();
+          });
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(content: Text('Error analyzing image: $e')),
+          );
         }
       }
     } catch (e) {
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('Error picking/sending image: $e')),
+        SnackBar(content: Text('Error picking image: $e')),
       );
     }
   }
@@ -127,19 +178,39 @@ class _FoundItemsScreenState extends State<FoundItemsScreen> {
     try {
       final supabase = Supabase.instance.client;
 
+      // Get current user
+      final user = supabase.auth.currentUser;
+      if (user == null) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('User not authenticated')),
+        );
+        setState(() => _isAddingItem = false);
+        return;
+      }
+
+      // Fetch PRN from users table by email
+      final userResponse = await supabase
+          .from('users')
+          .select('prn')
+          .eq('email', user.email!)
+          .single();
+
+      final userPrn = userResponse['prn'] as String?;
+
       // 1️⃣ Upload image
       final imageUrl = await uploadImageToSupabase(_selectedImage!);
 
       if (_llmResult == null) {
         ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('AI analysis not ready')),
+          SnackBar(content: Text(_analysisError ?? 'AI analysis not ready. Please wait for the image to be analyzed.')),
         );
+        setState(() => _isAddingItem = false);
         return;
       }
 
       final aiResult = _llmResult!;
 
-      // 3️⃣ Insert into DB
+      // 2️⃣ Insert into DB with added_by
       await supabase.from('found_items').insert({
         'title': _titleController.text,
         'description': _descriptionController.text,
@@ -153,6 +224,7 @@ class _FoundItemsScreenState extends State<FoundItemsScreen> {
         'ai_adjectives': aiResult['adjectives'],
         'ai_description': aiResult['description'],
         'image_url': imageUrl,
+        'added_by': userPrn,
       });
 
       // Add to local list
@@ -170,7 +242,7 @@ class _FoundItemsScreenState extends State<FoundItemsScreen> {
         dateFound: DateTime.now(),
       );
 
-      // 4️⃣ Reset UI
+      // 3️⃣ Reset UI
       _titleController.clear();
       _descriptionController.clear();
       _locationController.clear();
