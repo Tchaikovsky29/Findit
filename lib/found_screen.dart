@@ -1,8 +1,12 @@
 import 'package:flutter/material.dart';
 import 'package:image_picker/image_picker.dart';
 import 'dart:io';
+import 'dart:async';
 import 'utils/constants.dart';
 import 'utils/validators.dart';
+import 'package:http/http.dart' as http;
+import 'dart:convert';  
+import 'package:supabase_flutter/supabase_flutter.dart';
 
 class FoundItemsScreen extends StatefulWidget {
   const FoundItemsScreen({Key? key}) : super(key: key);
@@ -13,7 +17,7 @@ class FoundItemsScreen extends StatefulWidget {
 
 class _FoundItemsScreenState extends State<FoundItemsScreen> {
   final _formKey = GlobalKey<FormState>();
-
+  Map<String, dynamic>? _llmResult;
   late TextEditingController _titleController;
   late TextEditingController _descriptionController;
   late TextEditingController _locationController;
@@ -24,6 +28,8 @@ class _FoundItemsScreenState extends State<FoundItemsScreen> {
 
   bool _isAddingItem = false;
   bool _showAddForm = false;
+  bool _isAnalyzingImage = false;
+  String? _analysisError;
 
   List<FoundItem> _postedItems = [
     FoundItem(
@@ -64,66 +70,199 @@ class _FoundItemsScreenState extends State<FoundItemsScreen> {
         maxHeight: 800,
       );
       if (pickedFile != null) {
-        setState(() => _selectedImage = File(pickedFile.path));
+        setState(() {
+          _selectedImage = File(pickedFile.path);
+          _isAnalyzingImage = true;
+          _analysisError = null;
+          _llmResult = null;
+        });
+        
+        // Convert image to base64 and send to API
+        try {
+          final bytes = await pickedFile.readAsBytes();
+          final base64Image = base64Encode(bytes);
+          
+          final response = await http.post(
+            Uri.parse('https://findit-api-production-1478.up.railway.app/analyze_image'),
+            headers: {'Content-Type': 'application/json'},
+            body: jsonEncode({'image_base64': base64Image}),
+          ).timeout(
+            const Duration(seconds: 120), // 2 minute timeout for LLM
+            onTimeout: () => throw TimeoutException('Image analysis took too long (>120s)'),
+          );
+          
+          if (response.statusCode == 200) {
+            final data = jsonDecode(response.body);
+            setState(() {
+              _llmResult = data['result'];
+              _isAnalyzingImage = false;
+              _analysisError = null;
+            });
+            ScaffoldMessenger.of(context).showSnackBar(
+              const SnackBar(content: Text('Image analyzed successfully!')),
+            );
+          } else {
+            final errorMsg = 'API returned ${response.statusCode}: ${response.body}';
+            setState(() {
+              _isAnalyzingImage = false;
+              _analysisError = errorMsg;
+            });
+            ScaffoldMessenger.of(context).showSnackBar(
+              SnackBar(content: Text('Analysis failed: $errorMsg')),
+            );
+          }
+        } on http.ClientException catch (e) {
+          setState(() {
+            _isAnalyzingImage = false;
+            _analysisError = 'Network error: ${e.toString()}';
+          });
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(content: Text('Network error: ${e.toString()}')),
+          );
+        } on TimeoutException catch (e) {
+          setState(() {
+            _isAnalyzingImage = false;
+            _analysisError = 'Request timeout: ${e.toString()}';
+          });
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(content: Text('Request timeout: ${e.toString()}')),
+          );
+        } catch (e) {
+          setState(() {
+            _isAnalyzingImage = false;
+            _analysisError = e.toString();
+          });
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(content: Text('Error analyzing image: $e')),
+          );
+        }
       }
     } catch (e) {
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text('Error picking image: $e'),
-          backgroundColor: AppConstants.errorColor,
-        ),
+        SnackBar(content: Text('Error picking image: $e')),
       );
     }
   }
 
-  void _submitItem() {
-    if (_formKey.currentState!.validate()) {
-      if (_selectedImage == null) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-            content: Text('Please select an image'),
-            backgroundColor: AppConstants.errorColor,
+  Future<String> uploadImageToSupabase(File image) async {
+    final supabase = Supabase.instance.client;
+
+    final fileName =
+        'found_${DateTime.now().millisecondsSinceEpoch}.jpg';
+
+    final path = 'images/$fileName';
+
+    await supabase.storage.from('Images').upload(
+          path,
+          image,
+          fileOptions: const FileOptions(
+            contentType: 'image/jpeg',
+            upsert: false,
           ),
         );
+
+    final publicUrl = supabase.storage.from('Images').getPublicUrl(path);
+    return publicUrl;
+  }
+
+  Future<void> _submitItem() async {
+    if (!_formKey.currentState!.validate() || _selectedImage == null) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Missing required fields')),
+      );
+      return;
+    }
+
+    setState(() => _isAddingItem = true);
+
+    try {
+      final supabase = Supabase.instance.client;
+
+      // Get current user
+      final user = supabase.auth.currentUser;
+      if (user == null) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('User not authenticated')),
+        );
+        setState(() => _isAddingItem = false);
         return;
       }
 
-      setState(() => _isAddingItem = true);
+      // Fetch PRN from users table by email
+      final userResponse = await supabase
+          .from('users')
+          .select('prn')
+          .eq('email', user.email!)
+          .single();
 
-      Future.delayed(const Duration(seconds: 2), () {
-        final newItem = FoundItem(
-          id: DateTime.now().millisecondsSinceEpoch.toString(),
-          title: _titleController.text,
-          description: _descriptionController.text,
-          location: _locationController.text,
-          tags: _tagsController.text
-              .split(',')
-              .map((tag) => tag.trim())
-              .where((tag) => tag.isNotEmpty)
-              .toList(),
-          imageUrl: _selectedImage!.path,
-          dateFound: DateTime.now(),
-        );
+      final userPrn = userResponse['prn'] as String?;
 
-        setState(() {
-          _postedItems.insert(0, newItem);
-          _isAddingItem = false;
-          _showAddForm = false;
-          _selectedImage = null;
-        });
+      // 1️⃣ Upload image
+      final imageUrl = await uploadImageToSupabase(_selectedImage!);
 
-        _titleController.clear();
-        _descriptionController.clear();
-        _locationController.clear();
-        _tagsController.clear();
-
+      if (_llmResult == null) {
         ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-            content: Text('Item posted successfully!'),
-            backgroundColor: AppConstants.successColor,
-          ),
+          SnackBar(content: Text(_analysisError ?? 'AI analysis not ready. Please wait for the image to be analyzed.')),
         );
+        setState(() => _isAddingItem = false);
+        return;
+      }
+
+      final aiResult = _llmResult!;
+
+      // 2️⃣ Insert into DB with added_by
+      await supabase.from('found_items').insert({
+        'title': _titleController.text,
+        'description': _descriptionController.text,
+        'location': _locationController.text,
+        'user_tags': _tagsController.text
+            .split(',')
+            .map((t) => t.trim())
+            .where((t) => t.isNotEmpty)
+            .toList(),
+        'ai_object': aiResult['object'],
+        'ai_adjectives': aiResult['adjectives'],
+        'ai_description': aiResult['description'],
+        'image_url': imageUrl,
+        'added_by': userPrn,
       });
+
+      // Add to local list
+      final newItem = FoundItem(
+        id: 'id_${DateTime.now().millisecondsSinceEpoch}',
+        title: _titleController.text,
+        description: _descriptionController.text,
+        location: _locationController.text,
+        tags: _tagsController.text
+            .split(',')
+            .map((t) => t.trim())
+            .where((t) => t.isNotEmpty)
+            .toList(),
+        imageUrl: imageUrl,
+        dateFound: DateTime.now(),
+      );
+
+      // 3️⃣ Reset UI
+      _titleController.clear();
+      _descriptionController.clear();
+      _locationController.clear();
+      _tagsController.clear();
+
+      setState(() {
+        _isAddingItem = false;
+        _showAddForm = false;
+        _selectedImage = null;
+        _postedItems.add(newItem);
+      });
+
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Item posted successfully!')),
+      );
+    } catch (e) {
+      setState(() => _isAddingItem = false);
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Upload failed: ${e.toString()}')),
+      );
     }
   }
 
@@ -278,7 +417,7 @@ class _FoundItemsScreenState extends State<FoundItemsScreen> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      body: Padding(
+      body: SingleChildScrollView(
         padding: const EdgeInsets.all(AppConstants.paddingMedium),
         child: Column(
           children: [
@@ -300,112 +439,112 @@ class _FoundItemsScreenState extends State<FoundItemsScreen> {
               const SizedBox(height: AppConstants.paddingMedium),
             ],
 
-            Expanded(
-              child: _postedItems.isEmpty
-                  ? const Center(
-                      child: Text(
-                        'No items posted yet',
-                        style: TextStyle(
-                          color: AppConstants.hintColor,
-                          fontSize: 16,
-                        ),
+            _postedItems.isEmpty
+                ? const Center(
+                    child: Text(
+                      'No items posted yet',
+                      style: TextStyle(
+                        color: AppConstants.hintColor,
+                        fontSize: 16,
                       ),
-                    )
-                  : ListView.builder(
-                      itemCount: _postedItems.length,
-                      itemBuilder: (context, index) {
-                        final item = _postedItems[index];
-                        return Card(
-                          margin: const EdgeInsets.only(
-                            bottom: AppConstants.paddingMedium,
+                    ),
+                  )
+                : ListView.builder(
+                    shrinkWrap: true,
+                    physics: const NeverScrollableScrollPhysics(),
+                    itemCount: _postedItems.length,
+                    itemBuilder: (context, index) {
+                      final item = _postedItems[index];
+                      return Card(
+                        margin: const EdgeInsets.only(
+                          bottom: AppConstants.paddingMedium,
+                        ),
+                        elevation: 2,
+                        shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(
+                            AppConstants.radiusLarge,
                           ),
-                          elevation: 2,
-                          shape: RoundedRectangleBorder(
-                            borderRadius: BorderRadius.circular(
-                              AppConstants.radiusLarge,
-                            ),
+                        ),
+                        child: Padding(
+                          padding: const EdgeInsets.all(
+                            AppConstants.paddingMedium,
                           ),
-                          child: Padding(
-                            padding: const EdgeInsets.all(
-                              AppConstants.paddingMedium,
-                            ),
-                            child: Column(
-                              crossAxisAlignment: CrossAxisAlignment.start,
-                              children: [
-                                if (item.imageUrl != null)
-                                  ClipRRect(
-                                    borderRadius: BorderRadius.circular(
-                                      AppConstants.radiusLarge,
-                                    ),
-                                    child: Image.file(
-                                      File(item.imageUrl!),
-                                      height: 200,
-                                      width: double.infinity,
-                                      fit: BoxFit.cover,
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              if (item.imageUrl != null)
+                                ClipRRect(
+                                  borderRadius: BorderRadius.circular(
+                                    AppConstants.radiusLarge,
+                                  ),
+                                  child: Image.network(
+                                    item.imageUrl!,
+                                    height: 200,
+                                    width: double.infinity,
+                                    fit: BoxFit.cover,
+                                  ),
+                                ),
+                              const SizedBox(height: AppConstants.paddingMedium),
+
+                              Text(
+                                item.title,
+                                style: AppConstants.heading2,
+                              ),
+                              const SizedBox(height: 8),
+
+                              Text(
+                                item.description,
+                                style: AppConstants.labelText,
+                                maxLines: 2,
+                                overflow: TextOverflow.ellipsis,
+                              ),
+                              const SizedBox(height: AppConstants.paddingMedium),
+
+                              Row(
+                                children: [
+                                  const Icon(
+                                    Icons.location_on,
+                                    size: 18,
+                                    color: AppConstants.hintColor,
+                                  ),
+                                  const SizedBox(width: 4),
+                                  Expanded(
+                                    child: Text(
+                                      item.location,
+                                      style: AppConstants.labelText,
+                                      maxLines: 1,
+                                      overflow: TextOverflow.ellipsis,
                                     ),
                                   ),
-                                const SizedBox(height: AppConstants.paddingMedium),
+                                ],
+                              ),
+                              const SizedBox(height: AppConstants.paddingMedium),
 
-                                Text(
-                                  item.title,
-                                  style: AppConstants.heading2,
-                                ),
-                                const SizedBox(height: 8),
-
-                                Text(
-                                  item.description,
-                                  style: AppConstants.labelText,
-                                  maxLines: 2,
-                                  overflow: TextOverflow.ellipsis,
-                                ),
-                                const SizedBox(height: AppConstants.paddingMedium),
-
-                                Row(
-                                  children: [
-                                    const Icon(
-                                      Icons.location_on,
-                                      size: 18,
-                                      color: AppConstants.hintColor,
-                                    ),
-                                    const SizedBox(width: 4),
-                                    Expanded(
-                                      child: Text(
-                                        item.location,
-                                        style: AppConstants.labelText,
-                                        maxLines: 1,
-                                        overflow: TextOverflow.ellipsis,
-                                      ),
-                                    ),
-                                  ],
-                                ),
-                                const SizedBox(height: AppConstants.paddingMedium),
-
-                                Wrap(
-                                  spacing: 8,
-                                  runSpacing: 8,
-                                  children: item.tags
-                                      .map((tag) => Chip(
-                                            label: Text(
-                                              tag,
-                                              style: const TextStyle(
-                                                fontSize: 12,
-                                                fontWeight: FontWeight.w600,
-                                                color: AppConstants.primaryColor,
-                                              ),
+                              Wrap(
+                                spacing: 8,
+                                runSpacing: 8,
+                                children: item.tags
+                                    .map((tag) => Chip(
+                                          label: Text(
+                                            tag,
+                                            style: const TextStyle(
+                                              fontSize: 12,
+                                              fontWeight: FontWeight.w600,
+                                              color: AppConstants.primaryColor,
                                             ),
-                                            backgroundColor: AppConstants
-                                                .primaryColor
-                                                .withOpacity(0.2),
-                                          ))
-                                      .toList(),
-                                ),
-                              ],
-                            ),
+                                          ),
+                                          backgroundColor: AppConstants
+                                              .primaryColor
+                                              .withOpacity(0.2),
+                                        ))
+                                    .toList(),
+                              ),
+                            ],
                           ),
-                        );
-                      },
-                    ),
-            ),
+                        ),
+                      );
+                    },
+                  ),
           ],
         ),
       ),
