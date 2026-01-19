@@ -1,3 +1,4 @@
+import 'dart:convert';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:crypto/crypto.dart';
 import 'config.dart';
@@ -23,6 +24,8 @@ class SupabaseService {
       // Hash admin password
       final adminPasswordHash = _hashPassword(AppConfig.adminPassword);
 
+
+
       // Create admin user
       await _client.from('users').insert({
         'prn': AppConfig.adminPRN,
@@ -37,8 +40,11 @@ class SupabaseService {
         'is_admin': true,
       });
 
+      print('Admin user created successfully');
+
       return true;
     } catch (e) {
+      print('Error initializing admin: $e');
       return false;
     }
   }
@@ -46,14 +52,17 @@ class SupabaseService {
   /// Check if user is admin
   static Future<bool> isUserAdmin(String prn) async {
     try {
+      print('Checking if user $prn is admin');
       final response = await _client
           .from('users')
           .select('is_admin')
           .eq('prn', prn)
           .single();
-      
+
+      print('isUserAdmin response: $response');
       return response['is_admin'] ?? false;
     } catch (e) {
+      print('Error checking admin status for $prn: $e');
       return false;
     }
   }
@@ -118,6 +127,6 @@ class SupabaseService {
   // ===== HELPER =====
   
   static String _hashPassword(String password) {
-    return sha256.convert(password.codeUnits).toString();
+    return sha256.convert(utf8.encode(password)).toString();
   }
 }

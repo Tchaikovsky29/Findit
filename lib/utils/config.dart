@@ -1,36 +1,26 @@
-import '../../env.dart';
+import '../env.dart';
 
-/// Secure configuration loader
-/// Handles all credentials safely at runtime
+/// Configuration wrapper that provides easy access to environment variables
+/// This layer of abstraction allows easy switching between environments
+
 class AppConfig {
-  // ===== SUPABASE =====
+  // ===== SUPABASE CONFIGURATION =====
   static String get supabaseUrl => EnvironmentConfig.supabaseUrl;
   static String get supabaseAnonKey => EnvironmentConfig.supabaseAnonKey;
   static String get supabaseAdminKey => EnvironmentConfig.supabaseAdminKey;
   
-  // ===== ADMIN =====
+  // ===== ADMIN CREDENTIALS =====
   static String get adminEmail => EnvironmentConfig.adminEmail;
   static String get adminPassword => EnvironmentConfig.adminPassword;
   static String get adminPRN => EnvironmentConfig.adminPRN;
   
-  // ===== APP =====
+  // ===== APP INFO =====
   static String get appName => EnvironmentConfig.appName;
   static String get appVersion => EnvironmentConfig.appVersion;
   static bool get isProduction => EnvironmentConfig.isProduction;
   
-  // ===== VALIDATION =====
-  static bool get isConfigured {
-    return supabaseUrl.isNotEmpty &&
-        supabaseAnonKey.isNotEmpty &&
-        !supabaseUrl.contains('YOUR_');
-  }
-
-  static void validateConfig() {
-    if (!isConfigured) {
-      throw Exception(
-        'Supabase credentials not configured. '
-        'Please copy env.example.dart to env.dart and fill in your credentials.'
-      );
-    }
-  }
+  /// Validates if Supabase credentials are properly configured
+  /// Returns true if both URL and Anon Key are provided
+  static bool get isConfigured => 
+      supabaseUrl.isNotEmpty && supabaseAnonKey.isNotEmpty;
 }

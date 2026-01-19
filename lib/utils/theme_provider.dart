@@ -5,7 +5,7 @@ class ThemeProvider extends ChangeNotifier {
   static const String _themeKey = 'theme_preference';
   final FlutterSecureStorage _storage = const FlutterSecureStorage();
 
-  ThemeMode _themeMode = ThemeMode.light;
+  ThemeMode _themeMode = ThemeMode.dark;
 
   ThemeMode get themeMode => _themeMode;
 
@@ -19,7 +19,7 @@ class ThemeProvider extends ChangeNotifier {
       if (savedTheme == 'dark') {
         _themeMode = ThemeMode.dark;
       } else {
-        _themeMode = ThemeMode.light;
+        _themeMode = ThemeMode.dark;
       }
       notifyListeners();
     } catch (e) {
