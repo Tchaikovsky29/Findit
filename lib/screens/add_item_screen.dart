@@ -171,15 +171,19 @@ class _AddItemScreenState extends State<AddItemScreen> {
     if (_titleController.text.trim().isEmpty) {
       return 'Please enter item title';
     }
-    
+
     if (_titleController.text.trim().length < 3) {
       return 'Title must be at least 3 characters';
     }
-    
+
     if (_locationController.text.trim().isEmpty) {
       return 'Please enter location where item was found';
     }
-    
+
+    if (_selectedImage == null) {
+      return 'Please select an item image';
+    }
+
     return null; // Valid
   }
   
@@ -329,7 +333,7 @@ class _AddItemScreenState extends State<AddItemScreen> {
             
             // ===== IMAGE SECTION =====
             Text(
-              'Item Image (Optional)',
+              'Item Image *',
               style: Theme.of(context).textTheme.titleMedium?.copyWith(
                 fontWeight: FontWeight.bold,
               ),
