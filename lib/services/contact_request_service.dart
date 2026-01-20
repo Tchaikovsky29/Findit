@@ -1,8 +1,22 @@
 import '../models/contact_request_model.dart';
 import '../models/supabase_service.dart';
 
-/// Service for handling contact requests
-/// Manages creating, updating, and fetching contact requests
+/// Service class for managing contact request operations.
+///
+/// This service handles all operations related to the secure contact request
+/// system, including creating requests, updating their status, and retrieving
+/// requests for both requesters and item owners. It ensures privacy by
+/// controlling when contact information is shared.
+///
+/// Example usage:
+/// ```dart
+/// final service = ContactRequestService();
+/// final result = await service.createContactRequest(
+///   itemId: 'item-uuid',
+///   requesterPrn: 'my-prn',
+///   message: 'I think this is mine',
+/// );
+/// ```
 class ContactRequestService {
   final _supabaseService = SupabaseService();
 
