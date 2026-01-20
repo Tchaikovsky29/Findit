@@ -97,7 +97,7 @@ class FoundItemsService {
       final response = await _supabaseService.client
           .from('found_items')
           .select('*, users(full_name, phone_number, email)')
-          .or('title.ilike.%$query%,description.ilike.%$query%,location.ilike.%$query%')
+          .or('title.ilike.%$query%,description.ilike.%$query%,location.ilike.%$query%,ai_description.ilike.%$query%')
           .order('created_at', ascending: false);
       
       return (response as List)
@@ -109,7 +109,28 @@ class FoundItemsService {
     }
   }
   
-  /// Search items by tag
+  /// Search found items with full-text search (includes AI description)
+  /// Uses PostgreSQL full-text search for better relevance ranking
+  /// Searches across title, description, AI description, and AI adjectives
+  /// 
+  /// Params:
+  ///   - query: Search string
+  /// 
+  /// Returns: Items ranked by relevance
+  Future<List<FoundItemModel>> searchFoundItemsFullText(String query) async {
+    try {
+      final response = await _supabaseService.client
+          .rpc('search_found_items', params: {'search_query': query});
+      
+      return (response as List)
+          .map((json) => FoundItemModel.fromJson(json as Map<String, dynamic>))
+          .toList();
+    } catch (e) {
+      print('âŒ Error with full-text search: $e');
+      return [];
+    }
+  }
+    /// Search items by tag
   /// Uses PostgreSQL array containment operator
   /// 
   /// Params:

@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import '../utils/constants.dart';
-// import 'utils/supabase_service.dart';
+import '../services/found_items_service.dart';
+import '../models/found_item_model.dart';
 
 class SearchScreen extends StatefulWidget {
   const SearchScreen({super.key});
@@ -11,38 +12,11 @@ class SearchScreen extends StatefulWidget {
 
 class _SearchScreenState extends State<SearchScreen> {
   final _searchController = TextEditingController();
+  final _foundItemsService = FoundItemsService();
   bool _isSearching = false;
-  List<Map<String, dynamic>> _searchResults = [];
+  List<FoundItemModel> _searchResults = [];
 
-  // Mock data - Replace with Supabase fetch
-  final List<Map<String, dynamic>> _allItems = [
-    {
-      'id': '1',
-      'title': 'Blue Leather Wallet',
-      'description': 'Lost blue leather bifold wallet with credit cards inside',
-      'location': 'Science Building, 2nd Floor',
-      'finder_name': 'Raj Kumar',
-      'finder_phone': '+91 98765 43210',
-      'timestamp': DateTime.now().subtract(const Duration(days: 2)),
-      'user_tags': ['wallet', 'leather', 'blue'],
-      'ai_tags': ['wallet', 'leather', 'bifold'],
-      'image_url': null,
-    },
-    {
-      'id': '2',
-      'title': 'Black iPhone 14',
-      'description': 'Black iPhone with cracked screen protector',
-      'location': 'Library Study Area',
-      'finder_name': 'Sarah Ahmed',
-      'finder_phone': '+91 97654 32109',
-      'timestamp': DateTime.now().subtract(const Duration(days: 1)),
-      'user_tags': ['phone', 'iphone', 'black'],
-      'ai_tags': ['phone', 'mobile', 'samsung'],
-      'image_url': null,
-    },
-  ];
-
-  void _performSearch(String query) {
+  void _performSearch(String query) async {
     if (query.isEmpty) {
       setState(() {
         _searchResults = [];
@@ -53,25 +27,24 @@ class _SearchScreenState extends State<SearchScreen> {
 
     setState(() => _isSearching = true);
 
-    Future.delayed(const Duration(milliseconds: 500), () {
-      final filtered = _allItems.where((item) {
-        final title = item['title'].toString().toLowerCase();
-        final description = item['description'].toString().toLowerCase();
-        final userTags = item['user_tags'] as List<dynamic>;
-        final aiTags = item['ai_tags'] as List<dynamic>;
-        final queryLower = query.toLowerCase();
-
-        return title.contains(queryLower) ||
-            description.contains(queryLower) ||
-            userTags.any((tag) => tag.toString().toLowerCase().contains(queryLower)) ||
-            aiTags.any((tag) => tag.toString().toLowerCase().contains(queryLower));
-      }).toList();
-
+    try {
+      // Use full-text search for better results
+      final results = await _foundItemsService.searchFoundItemsFullText(query);
       setState(() {
-        _searchResults = filtered;
+        _searchResults = results;
         _isSearching = false;
       });
-    });
+    } catch (e) {
+      setState(() => _isSearching = false);
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Search error: $e'),
+            backgroundColor: Colors.red,
+          ),
+        );
+      }
+    }
   }
 
   @override
@@ -123,6 +96,7 @@ class _SearchScreenState extends State<SearchScreen> {
                       border: InputBorder.none,
                     ),
                     onChanged: (value) {
+                      debugPrint('=== onChanged triggered: "$value" (length: ${value.length}) ===');
                       setState(() {});
                       if (value.length > 2) {
                         _performSearch(value);
@@ -178,13 +152,13 @@ class _SearchScreenState extends State<SearchScreen> {
                                         CrossAxisAlignment.start,
                                     children: [
                                       Text(
-                                        item['title'],
+                                        item.title,
                                         style: AppConstants.heading2,
                                       ),
                                       const SizedBox(height: 8),
 
                                       Text(
-                                        item['description'],
+                                        item.description,
                                         style: AppConstants.labelText,
                                         maxLines: 2,
                                         overflow: TextOverflow.ellipsis,
@@ -201,7 +175,7 @@ class _SearchScreenState extends State<SearchScreen> {
                                           const SizedBox(width: 4),
                                           Expanded(
                                             child: Text(
-                                              item['location'],
+                                              item.location,
                                               style: AppConstants.labelText,
                                               maxLines: 1,
                                               overflow: TextOverflow.ellipsis,
@@ -212,7 +186,7 @@ class _SearchScreenState extends State<SearchScreen> {
                                       const SizedBox(height: 8),
 
                                       Text(
-                                        'Found by: ${item['finder_name']}',
+                                        'Found by: ${item.userDetails?['full_name'] ?? 'Unknown'}',
                                         style: const TextStyle(
                                           fontSize: 12,
                                           fontWeight: FontWeight.w600,
@@ -226,34 +200,34 @@ class _SearchScreenState extends State<SearchScreen> {
                                       Wrap(
                                         spacing: 6,
                                         children: [
-                                          ...((item['user_tags'] as List)
-                                              .map((tag) => Chip(
-                                                    label: Text(
-                                                      tag,
-                                                      style:
-                                                          const TextStyle(
-                                                        fontSize: 11,
-                                                      ),
-                                                    ),
-                                                    backgroundColor:
-                                                        AppConstants
-                                                            .primaryColor
-                                                            .withValues(alpha: 0.2),
-                                                  ))),
-                                          ...((item['ai_tags'] as List)
-                                              .map((tag) => Chip(
-                                                    label: Text(
-                                                      tag,
-                                                      style:
-                                                          const TextStyle(
-                                                        fontSize: 11,
-                                                      ),
-                                                    ),
-                                                    backgroundColor:
-                                                        AppConstants
-                                                            .accentColor
-                                                            .withValues(alpha: 0.2),
-                                                  ))),
+                                          // User tags
+                                          if (item.userTags.isNotEmpty)
+                                            ...item.userTags.map((tag) => Chip(
+                                              label: Text(
+                                                tag,
+                                                style: const TextStyle(
+                                                  fontSize: 11,
+                                                ),
+                                              ),
+                                              backgroundColor:
+                                                  AppConstants
+                                                      .primaryColor
+                                                      .withValues(alpha: 0.2),
+                                            )),
+                                          // AI adjectives
+                                          if (item.aiAdjectives != null && item.aiAdjectives!.isNotEmpty)
+                                            ...item.aiAdjectives!.map((adj) => Chip(
+                                              label: Text(
+                                                adj,
+                                                style: const TextStyle(
+                                                  fontSize: 11,
+                                                ),
+                                              ),
+                                              backgroundColor:
+                                                  AppConstants
+                                                      .accentColor
+                                                      .withValues(alpha: 0.2),
+                                            )),
                                         ],
                                       ),
                                       const SizedBox(
@@ -268,7 +242,7 @@ class _SearchScreenState extends State<SearchScreen> {
                                                 .showSnackBar(
                                               SnackBar(
                                                 content: Text(
-                                                  'Contact: ${item['finder_phone']}',
+                                                  'Contact: ${item.userDetails?['phone_number'] ?? 'Unknown'}',
                                                 ),
                                                 backgroundColor:
                                                     AppConstants.successColor,
