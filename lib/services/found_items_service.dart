@@ -223,6 +223,42 @@ class FoundItemsService {
   
   // ===== CREATE OPERATIONS =====
   
+  /// Add new found item to database with AI analysis data
+  /// Handles image upload and includes LLM analysis results
+  /// 
+  /// Params:
+  ///   - title: Item title (required)
+  ///   - description: Item description
+  ///   - location: Location found (required)
+  ///   - userTags: User-added tags for search
+  ///   - imageFile: Image file to upload (required)
+  ///   - aiObject: AI-detected main object
+  ///   - aiAdjectives: AI-detected adjectives
+  ///   - aiDescription: AI-generated description
+  /// 
+  /// Returns: Result map with success status
+  Future<Map<String, dynamic>> addFoundItemWithAnalysis({
+    required String title,
+    required String description,
+    required String location,
+    required List<String> userTags,
+    required File imageFile,
+    required String aiObject,
+    required List<String> aiAdjectives,
+    required String aiDescription,
+  }) async {
+    return addFoundItem(
+      title: title,
+      description: description,
+      location: location,
+      userTags: userTags,
+      aiObject: aiObject,
+      aiAdjectives: aiAdjectives,
+      aiDescription: aiDescription,
+      imageFile: imageFile,
+    );
+  }
+  
   /// Add new found item to database
   /// Handles image upload if provided
   /// 
