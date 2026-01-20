@@ -4,9 +4,19 @@ import 'package:supabase_flutter/supabase_flutter.dart';
 import '../models/supabase_service.dart';
 import '../models/found_item_model.dart';
 
-/// Found Items Service - Handles CRUD operations for found items
-/// Includes image upload to cloud storage
-
+/// Service class for managing found item operations and image uploads.
+///
+/// This service provides comprehensive CRUD operations for found items,
+/// including image upload to Supabase Storage, search functionality,
+/// and data retrieval with user details. It handles all database
+/// interactions for the found items feature.
+///
+/// Example usage:
+/// ```dart
+/// final service = FoundItemsService();
+/// final items = await service.getAllFoundItems();
+/// final results = await service.searchFoundItems('wallet');
+/// ```
 class FoundItemsService {
   final _supabaseService = SupabaseService();
   final ImagePicker _imagePicker = ImagePicker();
