@@ -40,30 +40,31 @@ class _ItemDetailsScreenState extends State<ItemDetailsScreen> {
     super.dispose();
   }
 
-  /// Check if user already has a pending request for this item
+
+
+  /// Check if user already has a request for this item
   Future<void> _checkExistingRequest() async {
     if (_supabaseService.currentUserPRN == null) {
       setState(() => _checkingRequest = false);
       return;
     }
 
-    final hasPending = await _contactRequestService.hasPendingRequest(
-      widget.item.id,
-      _supabaseService.currentUserPRN!,
-    );
+    final requests = await _contactRequestService.getRequestsByUser(_supabaseService.currentUserPRN!);
+    final request = requests.where((r) => r.itemId == widget.item.id).firstOrNull;
 
-    if (hasPending) {
-      final requests = await _contactRequestService.getRequestsByUser(_supabaseService.currentUserPRN!);
-      final request = requests.where((r) => r.itemId == widget.item.id).firstOrNull;
+    if (request != null) {
       setState(() {
         _existingRequest = request;
         _checkingRequest = false;
       });
+
       _startStatusPolling(); // Start polling after we have an existing request
     } else {
       setState(() => _checkingRequest = false);
     }
   }
+
+
 
   /// Start polling for request status updates
   void _startStatusPolling() {
@@ -78,6 +79,7 @@ class _ItemDetailsScreenState extends State<ItemDetailsScreen> {
         final updatedRequest = requests.where((r) => r.itemId == widget.item.id).firstOrNull;
 
         if (updatedRequest != null && updatedRequest.status != _existingRequest!.status) {
+
           setState(() {
             _existingRequest = updatedRequest;
           });
@@ -90,6 +92,7 @@ class _ItemDetailsScreenState extends State<ItemDetailsScreen> {
                 duration: Duration(seconds: 3),
               ),
             );
+
           }
         }
       } catch (e) {
@@ -192,6 +195,8 @@ class _ItemDetailsScreenState extends State<ItemDetailsScreen> {
   Widget build(BuildContext context) {
     final item = widget.item;
     final isOwnItem = item.addedBy == _supabaseService.currentUserPRN;
+
+
 
     return Scaffold(
       body: CustomScrollView(
@@ -552,29 +557,7 @@ class _ItemDetailsScreenState extends State<ItemDetailsScreen> {
                           ],
                         ),
                       ),
-                    ] else if (_existingRequest?.status != 'denied' || _checkingRequest) ...[
-                      // Send Request Button
-                      SizedBox(
-                        width: double.infinity,
-                        child: ElevatedButton.icon(
-                          onPressed: (_isLoading || _checkingRequest) ? null : _sendContactRequest,
-                          icon: _isLoading
-                              ? const SizedBox(
-                                  width: 20,
-                                  height: 20,
-                                  child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white),
-                                )
-                              : const Icon(Icons.send),
-                          label: Text(_checkingRequest ? 'Checking...' : 'Send Contact Request'),
-                          style: ElevatedButton.styleFrom(
-                            backgroundColor: AppConstants.secondaryColor,
-                            padding: const EdgeInsets.symmetric(vertical: 12),
-                            shape: RoundedRectangleBorder(
-                              borderRadius: BorderRadius.circular(8),
-                            ),
-                          ),
-                        ),
-                      ),
+                      
                     ] else ...[
                       // Retry Button for denied requests
                       SizedBox(

@@ -29,8 +29,8 @@ class _SignupScreenState extends State<SignupScreen> with SingleTickerProviderSt
   String? _selectedDepartment;
 
   final List<String> _yearOptions = ['1', '2', '3', '4'];
-  final List<String> _branchOptions = ['CSE', 'ECE', 'Mechanical', 'Civil', 'Electrical'];
-  final List<String> _departmentOptions = ['Engineering', 'Science', 'Arts', 'Commerce', 'CSBS'];
+  final List<String> _branchOptions = ['CSE', 'ECE', 'Mechanical', 'Civil', 'Electrical', 'CSBS'];
+  final List<String> _departmentOptions = ['Engineering', 'Science', 'Arts', 'Commerce'];
 
   bool _isLoading = false;
   bool _obscurePassword = true;
