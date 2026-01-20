@@ -300,22 +300,57 @@ class _ItemDetailsScreenState extends State<ItemDetailsScreen> {
                       color: Colors.white,
                     ),
                   ),
-                  const SizedBox(height: 8),
-                  Text(
-                    item.description,
-                    style: const TextStyle(
-                      fontSize: 16,
-                      color: Colors.white70,
-                      height: 1.5,
+                  const SizedBox(height: 12),
+                  
+                  // User Description
+                  if (item.description.isNotEmpty) ...[
+                    const Text(
+                      'User Description',
+                      style: TextStyle(
+                        fontSize: 14,
+                        fontWeight: FontWeight.w600,
+                        color: Colors.white70,
+                      ),
                     ),
-                  ),
+                    const SizedBox(height: 6),
+                    Text(
+                      item.description,
+                      style: const TextStyle(
+                        fontSize: 16,
+                        color: Colors.white70,
+                        height: 1.5,
+                      ),
+                    ),
+                    const SizedBox(height: 16),
+                  ],
+                  
+                  // AI Description
+                  if (item.aiDescription != null && item.aiDescription!.isNotEmpty) ...[
+                    const Text(
+                      'AI Analysis',
+                      style: TextStyle(
+                        fontSize: 14,
+                        fontWeight: FontWeight.w600,
+                        color: Colors.white70,
+                      ),
+                    ),
+                    const SizedBox(height: 6),
+                    Text(
+                      item.aiDescription!,
+                      style: const TextStyle(
+                        fontSize: 16,
+                        color: Colors.white70,
+                        height: 1.5,
+                      ),
+                    ),
+                  ],
 
                   const SizedBox(height: 24),
 
-                  // AI Information
-                  if (item.aiObject != null || item.aiAdjectives != null || item.aiDescription != null) ...[
+                  // AI Characteristics (Adjectives as tags)
+                  if (item.aiAdjectives != null && item.aiAdjectives!.isNotEmpty) ...[
                     const Text(
-                      'AI Analysis',
+                      'AI Tags',
                       style: TextStyle(
                         fontSize: 20,
                         fontWeight: FontWeight.bold,
@@ -323,23 +358,22 @@ class _ItemDetailsScreenState extends State<ItemDetailsScreen> {
                       ),
                     ),
                     const SizedBox(height: 12),
-                    Container(
-                      padding: const EdgeInsets.all(16),
-                      decoration: BoxDecoration(
-                        color: Colors.white10,
-                        borderRadius: BorderRadius.circular(12),
-                      ),
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          if (item.aiObject != null)
-                            Text('Object: ${item.aiObject}', style: const TextStyle(color: Colors.white)),
-                          if (item.aiAdjectives != null && item.aiAdjectives!.isNotEmpty)
-                            Text('Characteristics: ${item.aiAdjectives!.join(', ')}', style: const TextStyle(color: Colors.white)),
-                          if (item.aiDescription != null)
-                            Text('AI Description: ${item.aiDescription}', style: const TextStyle(color: Colors.white)),
-                        ],
-                      ),
+                    Wrap(
+                      spacing: 8,
+                      runSpacing: 8,
+                      children: item.aiAdjectives!.map((adjective) {
+                        return Container(
+                          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+                          decoration: BoxDecoration(
+                            color: const Color.fromARGB(255, 51, 51, 51).withOpacity(0.3),
+                            borderRadius: BorderRadius.circular(20)
+                          ),
+                          child: Text(
+                            adjective,
+                            style: const TextStyle(color: Colors.white, fontSize: 12),
+                          ),
+                        );
+                      }).toList(),
                     ),
                     const SizedBox(height: 24),
                   ],
@@ -347,7 +381,7 @@ class _ItemDetailsScreenState extends State<ItemDetailsScreen> {
                   // Tags
                   if (item.userTags.isNotEmpty) ...[
                     const Text(
-                      'Tags',
+                      'User Tags',
                       style: TextStyle(
                         fontSize: 20,
                         fontWeight: FontWeight.bold,
