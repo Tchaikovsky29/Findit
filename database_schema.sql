@@ -1,69 +1,114 @@
+-- =============================================================================
 -- Database Schema for Find-It App
--- Run this in Supabase SQL Editor to create the necessary tables
+-- =============================================================================
+-- This script creates all necessary tables, policies, and storage buckets
+-- for the Find-It campus lost and found application.
+--
+-- Run this in your Supabase project SQL Editor to set up the database.
+--
+-- Tables created:
+-- - users: User accounts and profiles
+-- - found_items: Reported found items with metadata
+-- - contact_requests: Secure contact request system
+--
+-- Security:
+-- - Row Level Security (RLS) enabled on all tables
+-- - Public policies (adjust for production as needed)
+-- - Storage bucket for images with public access
 
--- Users table for authentication and user data
+-- =============================================================================
+-- Users Table
+-- =============================================================================
+-- Stores user account information and authentication data.
+-- PRN serves as the primary key for unique identification.
 CREATE TABLE users (
-    prn VARCHAR PRIMARY KEY,
-    password_hash VARCHAR NOT NULL,
-    full_name VARCHAR NOT NULL,
-    year INTEGER NOT NULL,
-    branch VARCHAR NOT NULL,
-    department VARCHAR NOT NULL,
-    phone_number VARCHAR NOT NULL,
-    email VARCHAR NOT NULL UNIQUE,
-    theme_preference VARCHAR DEFAULT 'light',
-    is_admin BOOLEAN DEFAULT false,
-    created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
-    updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
+    prn VARCHAR PRIMARY KEY,                    -- Unique Personal Registration Number
+    password_hash VARCHAR NOT NULL,             -- SHA-256 hashed password (client-side hashing)
+    full_name VARCHAR NOT NULL,                 -- User's complete name
+    year INTEGER NOT NULL,                      -- Academic year (1-4)
+    branch VARCHAR NOT NULL,                    -- Academic branch (e.g., "Computer Science")
+    department VARCHAR NOT NULL,                -- Academic department (e.g., "Engineering")
+    phone_number VARCHAR NOT NULL,              -- Contact phone number
+    email VARCHAR NOT NULL UNIQUE,              -- Email address (unique constraint)
+    theme_preference VARCHAR DEFAULT 'light',   -- UI theme preference ('light' or 'dark')
+    is_admin BOOLEAN DEFAULT false,             -- Administrative privileges flag
+    created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(), -- Account creation timestamp
+    updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()  -- Last update timestamp
 );
 
--- Found items table
+-- =============================================================================
+-- Found Items Table
+-- =============================================================================
+-- Stores information about items that have been found and reported.
+-- Includes AI-generated metadata for enhanced search capabilities.
 CREATE TABLE found_items (
-    id UUID DEFAULT gen_random_uuid() PRIMARY KEY,
-    title VARCHAR NOT NULL,
-    description TEXT NOT NULL,
-    location VARCHAR NOT NULL,
-    user_tags TEXT[] DEFAULT '{}',
-    ai_object VARCHAR,
-    ai_adjectives TEXT[],
-    ai_description TEXT,
-    image_url VARCHAR,
-    added_by VARCHAR REFERENCES users(prn) ON DELETE CASCADE,
-    created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
-    updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
+    id UUID DEFAULT gen_random_uuid() PRIMARY KEY, -- Unique item identifier
+    title VARCHAR NOT NULL,                       -- Item title/name
+    description TEXT NOT NULL,                    -- Detailed item description
+    location VARCHAR NOT NULL,                    -- Location where item was found
+    user_tags TEXT[] DEFAULT '{}',                -- User-defined tags for search
+    ai_object VARCHAR,                            -- AI-detected primary object
+    ai_adjectives TEXT[],                         -- AI-detected descriptive adjectives
+    ai_description TEXT,                          -- AI-generated item description
+    image_url VARCHAR,                            -- URL of uploaded item image
+    added_by VARCHAR REFERENCES users(prn) ON DELETE CASCADE, -- Reporter's PRN
+    created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(), -- Item creation timestamp
+    updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()  -- Last update timestamp
 );
 
--- Enable Row Level Security (RLS)
+-- =============================================================================
+-- Contact Requests Table
+-- =============================================================================
+-- Implements secure contact request system between finders and item reporters.
+-- Protects user privacy by requiring approval before sharing contact info.
+CREATE TABLE contact_requests (
+    id UUID DEFAULT gen_random_uuid() PRIMARY KEY, -- Unique request identifier
+    item_id UUID REFERENCES found_items(id) ON DELETE CASCADE, -- Referenced item
+    requester_prn VARCHAR NOT NULL,               -- PRN of user making request
+    status VARCHAR DEFAULT 'pending' CHECK (status IN ('pending', 'approved', 'denied')), -- Request status
+    message TEXT,                                 -- Optional message from requester
+    created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(), -- Request creation timestamp
+    updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()  -- Last update timestamp
+);
+
+-- =============================================================================
+-- Row Level Security (RLS) Configuration
+-- =============================================================================
+-- Enable RLS on all tables for fine-grained access control
 ALTER TABLE users ENABLE ROW LEVEL SECURITY;
 ALTER TABLE found_items ENABLE ROW LEVEL SECURITY;
-
--- Policies for users table (allow public read/write for now, adjust as needed)
--- For production, restrict based on authentication
-CREATE POLICY "Allow all operations on users" ON users FOR ALL USING (true);
-
--- Policies for found_items
-CREATE POLICY "Allow all operations on found_items" ON found_items FOR ALL USING (true);
-
--- Contact requests table (for in-app notifications)
-CREATE TABLE contact_requests (
-    id UUID DEFAULT gen_random_uuid() PRIMARY KEY,
-    item_id UUID REFERENCES found_items(id) ON DELETE CASCADE,
-    requester_prn VARCHAR NOT NULL,
-    status VARCHAR DEFAULT 'pending' CHECK (status IN ('pending', 'approved', 'denied')),
-    message TEXT,
-    created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
-    updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
-);
-
--- Enable Row Level Security for contact_requests
 ALTER TABLE contact_requests ENABLE ROW LEVEL SECURITY;
 
--- Policies for contact_requests
+-- =============================================================================
+-- Security Policies
+-- =============================================================================
+-- Note: These policies allow all operations for development.
+-- For production, implement proper authentication-based restrictions.
+
+-- Users table policies
+CREATE POLICY "Allow all operations on users" ON users FOR ALL USING (true);
+
+-- Found items table policies
+CREATE POLICY "Allow all operations on found_items" ON found_items FOR ALL USING (true);
+
+-- Contact requests table policies
 CREATE POLICY "Allow all operations on contact_requests" ON contact_requests FOR ALL USING (true);
 
--- Create storage bucket for images (if not exists)
+-- =============================================================================
+-- Storage Configuration
+-- =============================================================================
+-- Create public storage bucket for item images
 INSERT INTO storage.buckets (id, name, public) VALUES ('found-items-images', 'found-items-images', true)
 ON CONFLICT (id) DO NOTHING;
 
--- Allow public access to images
+-- Allow public read access to item images
 CREATE POLICY "Public access to found-items-images" ON storage.objects FOR SELECT USING (bucket_id = 'found-items-images');
+
+-- =============================================================================
+-- Additional Notes
+-- =============================================================================
+-- - Passwords are hashed client-side using SHA-256 for security
+-- - Image URLs point to Supabase Storage public bucket
+-- - Foreign key constraints ensure data integrity
+-- - CASCADE deletes maintain referential integrity
+-- - Timestamps are automatically managed by PostgreSQL

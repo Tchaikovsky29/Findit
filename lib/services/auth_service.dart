@@ -4,9 +4,22 @@ import 'package:supabase_flutter/supabase_flutter.dart';
 import '../models/supabase_service.dart';
 import '../models/user_model.dart';
 
-/// Authentication Service - Handles signup, login, and user management
-/// All password hashing happens on client side for security
-
+/// Service class for handling user authentication and account management.
+///
+/// This service provides comprehensive authentication functionality including
+/// user registration, login, profile management, and password changes.
+/// Passwords are hashed client-side using SHA-256 for security.
+///
+/// Example usage:
+/// ```dart
+/// final authService = AuthService();
+/// final result = await authService.signup(
+///   prn: 'CS12345',
+///   password: 'password123',
+///   fullName: 'John Doe',
+///   // ... other parameters
+/// );
+/// ```
 class AuthService {
   final _supabaseService = SupabaseService();
   
