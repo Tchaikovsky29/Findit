@@ -27,6 +27,15 @@ class ContactRequestService {
     String? message,
   }) async {
     try {
+      // Check if user already has a pending request for this item
+      final hasPending = await hasPendingRequest(itemId, requesterPrn);
+      if (hasPending) {
+        return {
+          'success': false,
+          'message': 'You already have a pending contact request for this item.',
+        };
+      }
+
       final response = await _supabaseService.client.from('contact_requests').insert({
         'item_id': itemId,
         'requester_prn': requesterPrn,
@@ -57,11 +66,11 @@ class ContactRequestService {
     try {
       final response = await _supabaseService.client
           .from('contact_requests')
-          .select()
+          .select('id, item_id, requester_prn, status, message, created_at, updated_at')
           .eq('item_id', itemId)
           .order('created_at', ascending: false);
 
-      return response.map((json) => ContactRequestModel.fromJson(json)).toList();
+      return (response as List).map((json) => ContactRequestModel.fromJson(json as Map<String, dynamic>)).toList();
     } catch (e) {
       print('Error fetching contact requests: $e');
       return [];
@@ -74,7 +83,7 @@ class ContactRequestService {
       // Use a more direct approach with a manual join query
       final response = await _supabaseService.client
           .from('contact_requests')
-          .select('*, found_items!inner(added_by)')
+          .select('id, item_id, requester_prn, status, message, created_at, updated_at, found_items!inner(added_by)')
           .eq('found_items.added_by', ownerPrn)
           .order('created_at', ascending: false);
 
@@ -140,11 +149,11 @@ class ContactRequestService {
     try {
       final response = await _supabaseService.client
           .from('contact_requests')
-          .select()
+          .select('id, item_id, requester_prn, status, message, created_at, updated_at')
           .eq('requester_prn', requesterPrn)
           .order('created_at', ascending: false);
 
-      return response.map((json) => ContactRequestModel.fromJson(json)).toList();
+      return (response as List).map((json) => ContactRequestModel.fromJson(json as Map<String, dynamic>)).toList();
     } catch (e) {
       print('Error fetching user contact requests: $e');
       return [];
@@ -197,7 +206,7 @@ class ContactRequestService {
     try {
       final response = await _supabaseService.client
           .from('contact_requests')
-          .select()
+          .select('id')
           .eq('item_id', itemId)
           .eq('requester_prn', requesterPrn)
           .eq('status', 'pending')
@@ -209,4 +218,8 @@ class ContactRequestService {
       return false;
     }
   }
+
+
+
+
 }
