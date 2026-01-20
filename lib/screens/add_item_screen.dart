@@ -1,7 +1,11 @@
 import 'package:flutter/material.dart';
 import 'dart:io';
+import 'dart:convert';
+import 'dart:async';
+import 'package:http/http.dart' as http;
 import '../services/found_items_service.dart';
 import '../utils/constants.dart';
+import '../env.dart';
 
 /// Add Item Screen
 /// Allows user to report a new found item
@@ -25,6 +29,9 @@ class _AddItemScreenState extends State<AddItemScreen> {
   // ===== STATE VARIABLES =====
   File? _selectedImage;
   bool _isLoading = false;
+  bool _isAnalyzingImage = false;
+  Map<String, dynamic>? _llmResult;
+  String? _analysisError;
   
   // ===== LIFECYCLE =====
   @override
@@ -74,7 +81,13 @@ class _AddItemScreenState extends State<AddItemScreen> {
   Future<void> _pickImageFromGallery() async {
     final imageFile = await _foundItemsService.pickImageFromGallery();
     if (imageFile != null) {
-      setState(() => _selectedImage = imageFile);
+      setState(() {
+        _selectedImage = imageFile;
+        _isAnalyzingImage = true;
+        _analysisError = null;
+        _llmResult = null;
+      });
+      await _analyzeImageWithFlask(imageFile);
     }
   }
   
@@ -82,7 +95,66 @@ class _AddItemScreenState extends State<AddItemScreen> {
   Future<void> _pickImageFromCamera() async {
     final imageFile = await _foundItemsService.pickImageFromCamera();
     if (imageFile != null) {
-      setState(() => _selectedImage = imageFile);
+      setState(() {
+        _selectedImage = imageFile;
+        _isAnalyzingImage = true;
+        _analysisError = null;
+        _llmResult = null;
+      });
+      await _analyzeImageWithFlask(imageFile);
+    }
+  }
+  
+  /// Analyze image using Flask API
+  /// Sends base64-encoded image to LLM for analysis
+  Future<void> _analyzeImageWithFlask(File imageFile) async {
+    try {
+      final bytes = await imageFile.readAsBytes();
+      final base64Image = base64Encode(bytes);
+      
+      final response = await http.post(
+        Uri.parse(EnvironmentConfig.imageAnalysisEndpoint),
+        headers: {'Content-Type': 'application/json'},
+        body: jsonEncode({'image_base64': base64Image}),
+      ).timeout(
+        const Duration(seconds: 120), // 2 minute timeout for LLM
+        onTimeout: () => throw TimeoutException('Image analysis took too long (>120s)'),
+      );
+      
+      if (response.statusCode == 200) {
+        final data = jsonDecode(response.body);
+        setState(() {
+          _llmResult = data['result'];
+          _isAnalyzingImage = false;
+          _analysisError = null;
+        });
+        _showSnackBar('Image analyzed successfully!');
+      } else {
+        final errorMsg = 'API returned ${response.statusCode}: ${response.body}';
+        setState(() {
+          _isAnalyzingImage = false;
+          _analysisError = errorMsg;
+        });
+        _showSnackBar('Analysis failed: $errorMsg', isError: true);
+      }
+    } on http.ClientException catch (e) {
+      setState(() {
+        _isAnalyzingImage = false;
+        _analysisError = 'Network error: ${e.toString()}';
+      });
+      _showSnackBar('Network error: ${e.toString()}', isError: true);
+    } on TimeoutException catch (e) {
+      setState(() {
+        _isAnalyzingImage = false;
+        _analysisError = 'Request timeout: ${e.toString()}';
+      });
+      _showSnackBar('Request timeout: ${e.toString()}', isError: true);
+    } catch (e) {
+      setState(() {
+        _isAnalyzingImage = false;
+        _analysisError = e.toString();
+      });
+      _showSnackBar('Error analyzing image: $e', isError: true);
     }
   }
   
@@ -112,12 +184,21 @@ class _AddItemScreenState extends State<AddItemScreen> {
   }
   
   /// Add found item to database
-  /// Validates, uploads image, and saves to database
+  /// Validates, uploads image, and saves to database with AI analysis
   Future<void> _addItem() async {
     // Validation
     final validationError = _validateInputs();
     if (validationError != null) {
       _showSnackBar(validationError, isError: true);
+      return;
+    }
+    
+    // Check if image analysis is complete
+    if (_llmResult == null) {
+      _showSnackBar(
+        _analysisError ?? 'Please wait for image analysis to complete',
+        isError: true,
+      );
       return;
     }
     
@@ -132,12 +213,15 @@ class _AddItemScreenState extends State<AddItemScreen> {
           .toList();
       
       // Call service to add item
-      final result = await _foundItemsService.addFoundItem(
+      final result = await _foundItemsService.addFoundItemWithAnalysis(
         title: _titleController.text.trim(),
         description: _descController.text.trim(),
         location: _locationController.text.trim(),
         userTags: tags,
-        imageFile: _selectedImage,
+        imageFile: _selectedImage!,
+        aiObject: _llmResult!['object'] ?? '',
+        aiAdjectives: List<String>.from(_llmResult!['adjectives'] ?? []),
+        aiDescription: _llmResult!['description'] ?? '',
       );
       
       setState(() => _isLoading = false);

@@ -84,11 +84,12 @@ class _SignupScreenState extends State<SignupScreen> with SingleTickerProviderSt
 
     try {
       final authService = AuthService();
+      final yearNumber = int.parse(_selectedYear!.split(' ')[1]);
       final result = await authService.signup(
         prn: _prnController.text.trim().toUpperCase(),
         password: _passwordController.text,
         fullName: _nameController.text,
-        year: int.parse(_selectedYear!),
+        year: yearNumber,
         branch: _selectedBranch!,
         department: _selectedDepartment!,
         phoneNumber: _phoneController.text,
@@ -210,7 +211,7 @@ class _SignupScreenState extends State<SignupScreen> with SingleTickerProviderSt
                   label: 'Year of Study',
                   icon: Icons.school_outlined,
                   items: _yearOptions.map((year) => 'Year $year').toList(),
-                  onChanged: (value) => setState(() => _selectedYear = value?.split(' ')[1]),
+                  onChanged: (value) => setState(() => _selectedYear = value),
                   validator: (value) => value == null ? 'Please select a year' : null,
                 ),
 

@@ -26,4 +26,6 @@ class EnvironmentConfig {
   // ===== API ENDPOINTS =====
   static const String apiBaseUrl = 'https://your-domain.com/api';
   static const int apiTimeout = 30; // seconds
+
+  static const String imageAnalysisEndpoint = 'https://your-image-analysis-endpoint.com/analyze_image';
 }
