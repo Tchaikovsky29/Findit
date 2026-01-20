@@ -101,7 +101,9 @@ class _HomeScreenState extends State<HomeScreen> {
         return item.title.toLowerCase().contains(query) ||
             item.description.toLowerCase().contains(query) ||
             item.location.toLowerCase().contains(query) ||
-            item.userTags.any((tag) => tag.toLowerCase().contains(query));
+            (item.aiDescription?.toLowerCase().contains(query) ?? false) ||
+            item.userTags.any((tag) => tag.toLowerCase().contains(query)) ||
+            (item.aiAdjectives?.any((adj) => adj.toLowerCase().contains(query)) ?? false);
       }).toList();
     }
     
@@ -402,7 +404,7 @@ class _HomeScreenState extends State<HomeScreen> {
                     ],
                   ),
 
-                  // ===== TAGS =====
+                  // ===== USER TAGS =====
                   if (item.userTags.isNotEmpty) ...[
                     const SizedBox(height: 12),
                     Wrap(
@@ -416,6 +418,35 @@ class _HomeScreenState extends State<HomeScreen> {
                             borderRadius: BorderRadius.circular(12),
                             border: Border.all(
                               color: AppConstants.primaryColor.withOpacity(0.3),
+                            ),
+                          ),
+                          child: Text(
+                            tag,
+                            style: const TextStyle(
+                              fontSize: 11,
+                              color: Colors.white,
+                              fontWeight: FontWeight.w500,
+                            ),
+                          ),
+                        );
+                      }).toList(),
+                    ),
+                  ],
+
+                  // ===== AI TAGS (ADJECTIVES) =====
+                  if (item.aiAdjectives != null && item.aiAdjectives!.isNotEmpty) ...[
+                    const SizedBox(height: 8),
+                    Wrap(
+                      spacing: 6,
+                      runSpacing: 6,
+                      children: item.aiAdjectives!.take(3).map((tag) {
+                        return Container(
+                          padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                          decoration: BoxDecoration(
+                            color: const Color.fromARGB(255, 0, 0, 0).withOpacity(0.2),
+                            borderRadius: BorderRadius.circular(12),
+                            border: Border.all(
+                              color: const Color.fromARGB(255, 0, 0, 0).withOpacity(0.3),
                             ),
                           ),
                           child: Text(

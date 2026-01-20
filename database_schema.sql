@@ -101,8 +101,65 @@ CREATE POLICY "Allow all operations on contact_requests" ON contact_requests FOR
 INSERT INTO storage.buckets (id, name, public) VALUES ('found-items-images', 'found-items-images', true)
 ON CONFLICT (id) DO NOTHING;
 
--- Allow public read access to item images
+-- Allow public access to images
 CREATE POLICY "Public access to found-items-images" ON storage.objects FOR SELECT USING (bucket_id = 'found-items-images');
+
+-- Full-text search function
+-- Searches across title, description, AI description, and AI adjectives
+-- Returns results ranked by relevance
+CREATE OR REPLACE FUNCTION search_found_items(search_query text)
+RETURNS TABLE (
+  id uuid,
+  title varchar,
+  description text,
+  location varchar,
+  ai_description text,
+  ai_adjectives text[],
+  ai_object varchar,
+  user_tags text[],
+  created_at timestamp with time zone,
+  image_url varchar,
+  added_by varchar,
+  updated_at timestamp with time zone
+) AS $$
+BEGIN
+  RETURN QUERY
+  SELECT 
+    found_items.id,
+    found_items.title,
+    found_items.description,
+    found_items.location,
+    found_items.ai_description,
+    found_items.ai_adjectives,
+    found_items.ai_object,
+    found_items.user_tags,
+    found_items.created_at,
+    found_items.image_url,
+    found_items.added_by,
+    found_items.updated_at
+  FROM found_items
+  WHERE 
+    to_tsvector('english', 
+      COALESCE(found_items.title, '') || ' ' || 
+      COALESCE(found_items.description, '') || ' ' || 
+      COALESCE(found_items.ai_description, '') || ' ' ||
+      COALESCE(array_to_string(found_items.ai_adjectives, ' '), '')
+    ) @@ plainto_tsquery('english', search_query)
+  ORDER BY 
+    ts_rank(
+      to_tsvector('english', 
+        COALESCE(found_items.title, '') || ' ' || 
+        COALESCE(found_items.description, '') || ' ' || 
+        COALESCE(found_items.ai_description, '') || ' ' ||
+        COALESCE(array_to_string(found_items.ai_adjectives, ' '), '')),
+      plainto_tsquery('english', search_query)
+    ) DESC,
+    found_items.created_at DESC;
+END;
+$$ LANGUAGE plpgsql STABLE;
+
+GRANT EXECUTE ON FUNCTION search_found_items(text) TO anon;
+GRANT EXECUTE ON FUNCTION search_found_items(text) TO authenticated;
 
 -- =============================================================================
 -- Additional Notes
