@@ -143,11 +143,16 @@ class _HomeScreenState extends State<HomeScreen> {
         item.id,
         imageUrl: item.imageUrl,
       );
-      
+
       if (mounted) {
         if (result['success']) {
           _showSnackBar('Item deleted successfully');
-          _loadItems(); // Refresh list
+          // Remove item from local lists immediately
+          setState(() {
+            _allItems.removeWhere((i) => i.id == item.id);
+            _displayItems = List.from(_allItems);
+            _filterItems(); // Apply current filter
+          });
         } else {
           _showSnackBar(result['message'], isError: true);
         }
