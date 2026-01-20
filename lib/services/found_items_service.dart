@@ -466,7 +466,21 @@ class FoundItemsService {
           .from('found_items')
           .delete()
           .eq('id', itemId);
-      
+
+      // Verify the item was actually deleted
+      final check = await _supabaseService.client
+          .from('found_items')
+          .select('id')
+          .eq('id', itemId)
+          .maybeSingle();
+
+      if (check != null) {
+        return {
+          'success': false,
+          'message': 'Item could not be deleted from database',
+        };
+      }
+
       return {
         'success': true,
         'message': 'Item deleted successfully',
